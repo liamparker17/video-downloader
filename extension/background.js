@@ -1,75 +1,94 @@
-// Create the right-click context menu item when the extension is installed.
+const BACKEND = "http://localhost:8080";
+const tabSources = new Map();
+const VIDEO_EXTENSIONS = /\.(mp4|webm|m3u8|mpd|ts|mkv|avi|mov)(\?|$)/i;
+const VIDEO_MIMES = /video\/|application\/x-mpegURL|application\/dash\+xml/i;
+
+chrome.webRequest.onCompleted.addListener(
+  (details) => {
+    if (details.tabId < 0) return;
+    const urlMatch = VIDEO_EXTENSIONS.test(details.url);
+    const mimeMatch = details.responseHeaders && details.responseHeaders.some((h) => h.name.toLowerCase() === "content-type" && VIDEO_MIMES.test(h.value));
+    if (!urlMatch && !mimeMatch) return;
+    const lower = details.url.toLowerCase().split("?")[0];
+    let vidType = "unknown";
+    if (lower.endsWith(".m3u8")) vidType = "hls";
+    else if (lower.endsWith(".mpd")) vidType = "dash";
+    else if (lower.endsWith(".mp4") || lower.endsWith(".webm")) vidType = "mp4";
+    if (lower.endsWith(".ts")) return;
+    let contentType = "";
+    let size = 0;
+    if (details.responseHeaders) {
+      for (const h of details.responseHeaders) {
+        const name = h.name.toLowerCase();
+        if (name === "content-type") contentType = h.value || "";
+        if (name === "content-length") size = parseInt(h.value, 10) || 0;
+      }
+    }
+    if (!tabSources.has(details.tabId)) tabSources.set(details.tabId, []);
+    const sources = tabSources.get(details.tabId);
+    if (!sources.some((s) => s.url === details.url)) {
+      sources.push({ url: details.url, type: vidType, contentType, size, timestamp: Date.now() });
+    }
+  },
+  { urls: ["<all_urls>"] },
+  ["responseHeaders", "extraHeaders"]
+);
+
+chrome.tabs.onRemoved.addListener((tabId) => tabSources.delete(tabId));
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => { if (changeInfo.url) tabSources.delete(tabId); });
+
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({
-    id: "download-video",
-    title: "Download Video",
-    // Show on all contexts — content script will find the actual video
-    contexts: ["video", "page", "link"],
-  });
-  console.log("[Video Downloader] Context menu registered.");
+  chrome.contextMenus.create({ id: "download-video", title: "Download Video", contexts: ["video", "page", "link"] });
+  console.log("[Video Downloader] Extension installed.");
 });
 
-// Handle the context menu click
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId !== "download-video") return;
-
-  console.log("[Video Downloader] Menu clicked. Asking content script for video info...");
-
-  // If right-clicked directly on a <video> element, Chrome gives us srcUrl
   const clickedSrc = info.srcUrl || null;
-
   try {
-    // Ask the content script to find video sources and page metadata
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      action: "getVideoInfo",
-      clickedSrc,
-    });
-
-    if (!response || !response.url) {
-      console.error("[Video Downloader] No video URL found on the page.");
-      return;
+    const response = await chrome.tabs.sendMessage(tab.id, { action: "getVideoInfo", clickedSrc });
+    const videoUrl = response?.url || "";
+    const title = response?.title || "";
+    let bestUrl = videoUrl;
+    if (!bestUrl) {
+      const sources = tabSources.get(tab.id) || [];
+      const hls = sources.find((s) => s.type === "hls");
+      const dash = sources.find((s) => s.type === "dash");
+      const direct = sources.sort((a, b) => (b.size || 0) - (a.size || 0))[0];
+      bestUrl = hls?.url || dash?.url || direct?.url || "";
     }
-
-    console.log(`[Video Downloader] Found video: ${response.url}`);
-
-    // Get cookies for the current tab's URL to forward with the download
     const cookies = await getCookiesForUrl(tab.url);
-
+    const settings = await chrome.storage.local.get(["defaultQuality", "defaultAudioOnly"]);
     const payload = {
-      url: response.url,
-      cookies: cookies,
-      headers: {
-        "User-Agent": navigator.userAgent,
-        Referer: tab.url,
-      },
+      url: bestUrl, pageUrl: tab.url, title: title, cookies: cookies,
+      headers: { "User-Agent": navigator.userAgent, Referer: tab.url },
+      quality: settings.defaultQuality || "best", audioOnly: settings.defaultAudioOnly || false,
     };
-
-    console.log("[Video Downloader] Sending download request to Go backend...");
-
-    const res = await fetch("http://localhost:8080/download", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
+    console.log("[Video Downloader] Sending download request:", payload);
+    const res = await fetch(`${BACKEND}/download`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const result = await res.json();
+    if (res.ok) console.log(`[Video Downloader] Job created: ${result.jobId}`);
+    else console.error(`[Video Downloader] Error: ${result.error}`);
+  } catch (err) { console.error("[Video Downloader] Failed:", err.message); }
+});
 
-    if (res.ok) {
-      console.log(`[Video Downloader] Success! Saved to: ${result.file}`);
-    } else {
-      console.error(`[Video Downloader] Backend error: ${result.error}`);
-    }
-  } catch (err) {
-    console.error("[Video Downloader] Failed:", err.message);
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === "getSources") {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tabId = tabs[0]?.id;
+      const sources = tabId ? tabSources.get(tabId) || [] : [];
+      sendResponse({ sources });
+    });
+    return true;
+  }
+  if (message.action === "download") {
+    fetch(`${BACKEND}/download`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(message.payload) })
+      .then((res) => res.json()).then((data) => sendResponse(data)).catch((err) => sendResponse({ error: err.message }));
+    return true;
   }
 });
 
-// Retrieve cookies for a given URL and format them as a header string.
 async function getCookiesForUrl(url) {
-  try {
-    const cookies = await chrome.cookies.getAll({ url });
-    return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
-  } catch {
-    return "";
-  }
+  try { const cookies = await chrome.cookies.getAll({ url }); return cookies.map((c) => `${c.name}=${c.value}`).join("; "); }
+  catch { return ""; }
 }
