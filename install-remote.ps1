@@ -25,7 +25,6 @@ Write-Host "[OK] Go: $(go version)" -ForegroundColor Green
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     Write-Host "[INSTALLING] ffmpeg via winget..." -ForegroundColor Yellow
     winget install Gyan.FFmpeg --accept-source-agreements --accept-package-agreements 2>$null
-    # Refresh PATH
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
     if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
         Write-Host "[ERROR] ffmpeg install failed. Install manually: winget install Gyan.FFmpeg" -ForegroundColor Red
@@ -35,7 +34,7 @@ if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
 }
 Write-Host "[OK] ffmpeg found" -ForegroundColor Green
 
-# yt-dlp (optional)
+# yt-dlp (optional but recommended)
 if (-not (Get-Command yt-dlp -ErrorAction SilentlyContinue)) {
     Write-Host "[INSTALLING] yt-dlp via winget..." -ForegroundColor Yellow
     winget install yt-dlp.yt-dlp --accept-source-agreements --accept-package-agreements 2>$null
@@ -48,6 +47,20 @@ if (-not (Get-Command yt-dlp -ErrorAction SilentlyContinue)) {
     }
 } else {
     Write-Host "[OK] yt-dlp found" -ForegroundColor Green
+}
+
+# deno (needed by yt-dlp for YouTube)
+if (-not (Get-Command deno -ErrorAction SilentlyContinue)) {
+    Write-Host "[INSTALLING] deno (needed by yt-dlp for YouTube)..." -ForegroundColor Yellow
+    winget install DenoLand.Deno --accept-source-agreements --accept-package-agreements 2>$null
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if (-not (Get-Command deno -ErrorAction SilentlyContinue)) {
+        Write-Host "[WARN] deno not installed. Some YouTube formats may not work." -ForegroundColor Yellow
+    } else {
+        Write-Host "[OK] deno installed" -ForegroundColor Green
+    }
+} else {
+    Write-Host "[OK] deno found" -ForegroundColor Green
 }
 
 # Git
@@ -86,17 +99,36 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "[OK] Built video-downloader.exe" -ForegroundColor Green
 
-# Create downloads dir
-New-Item -ItemType Directory -Path "downloads" -Force | Out-Null
-
-# --- Create start script ---
+# --- Create start script with PATH refresh ---
 
 $startScript = @"
 @echo off
 cd /d "$installDir"
-echo Starting Video Downloader backend...
-echo Press Ctrl+C to stop.
+
+REM Refresh PATH so yt-dlp, deno, ffmpeg are found
+for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USER_PATH=%%B"
+for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
+set "PATH=%SYS_PATH%;%USER_PATH%"
+
+if not exist video-downloader.exe (
+    echo First run — building video-downloader.exe...
+    go build -o video-downloader.exe .
+    if %ERRORLEVEL% neq 0 (
+        echo Build failed. Make sure Go is installed.
+        pause
+        exit /b 1
+    )
+)
+
+echo ============================================
+echo  Video Downloader Backend
+echo ============================================
+echo.
+echo  Leave this window open while downloading.
+echo  Press Ctrl+C to stop.
+echo.
 video-downloader.exe
+pause
 "@
 Set-Content -Path "$installDir\start.bat" -Value $startScript
 
@@ -111,6 +143,17 @@ $shortcut.WorkingDirectory = $installDir
 $shortcut.Description = "Start Video Downloader backend"
 $shortcut.Save()
 Write-Host "[OK] Desktop shortcut created" -ForegroundColor Green
+
+# --- Auto-start on login ---
+
+$startupPath = [Environment]::GetFolderPath("Startup")
+$startupShortcut = $shell.CreateShortcut("$startupPath\Video Downloader.lnk")
+$startupShortcut.TargetPath = "$installDir\start.bat"
+$startupShortcut.WorkingDirectory = $installDir
+$startupShortcut.WindowStyle = 7
+$startupShortcut.Description = "Auto-start Video Downloader backend"
+$startupShortcut.Save()
+Write-Host "[OK] Auto-start on login enabled" -ForegroundColor Green
 
 Pop-Location
 
@@ -136,7 +179,6 @@ $bravePaths = @(
 $browserExe = $null
 $browserName = $null
 
-# Try Chrome first, then Brave
 $chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 $braveExe = $bravePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
@@ -160,6 +202,7 @@ Write-Host "  -------" -ForegroundColor Gray
 Write-Host "  Double-click the 'Video Downloader' shortcut" -ForegroundColor White
 Write-Host "  on your Desktop. A black window will open." -ForegroundColor White
 Write-Host "  LEAVE IT OPEN while you download videos." -ForegroundColor Yellow
+Write-Host "  (It will also auto-start when you log in)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  STEP 2: Add the extension to your browser" -ForegroundColor White
 Write-Host "  -------" -ForegroundColor Gray
@@ -201,8 +244,11 @@ Write-Host "  Go to any website with a video (YouTube, etc.)" -ForegroundColor W
 Write-Host "  RIGHT-CLICK anywhere on the page and click" -ForegroundColor White
 Write-Host "  'Download Video'" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  Your video will be saved to:" -ForegroundColor White
-Write-Host "  $installDir\downloads" -ForegroundColor Cyan
+Write-Host "  Videos are saved to your Downloads folder:" -ForegroundColor White
+Write-Host "  $env:USERPROFILE\Downloads" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  TIP: Open downloaded videos with VLC for best" -ForegroundColor Gray
+Write-Host "  compatibility (some players can't handle all formats)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
