@@ -1,6 +1,25 @@
 const BACKEND = "http://localhost:8080";
 let selectedSource = null;
 let pollInterval = null;
+let statusInterval = null;
+
+// ── Backend Status Indicator ──
+async function checkBackendStatus() {
+  const dot = document.getElementById("status-dot");
+  try {
+    const res = await fetch(`${BACKEND}/health`, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      dot.className = "status-dot online";
+      dot.title = "Backend running";
+      return true;
+    }
+  } catch {}
+  dot.className = "status-dot offline";
+  dot.title = "Backend offline — double-click 'Video Downloader' on your desktop to start";
+  return false;
+}
+checkBackendStatus();
+statusInterval = setInterval(checkBackendStatus, 3000);
 
 document.querySelectorAll("nav .tab").forEach((tab) => {
   tab.addEventListener("click", () => {
