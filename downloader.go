@@ -124,13 +124,25 @@ func runPipeline(job *Job, req DownloadRequest) {
 	log.Printf("[PIPELINE] Job %s completed: %s", job.ID, outPath)
 }
 
+// getDownloadsDir returns the user's system Downloads folder.
+func getDownloadsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "downloads"
+	}
+	dir := filepath.Join(home, "Downloads")
+	os.MkdirAll(dir, 0755)
+	return dir
+}
+
 func generateFilename(title, ext string) string {
 	timestamp := time.Now().Format("20060102_150405_000")
 	sanitized := sanitizeTitle(title)
+	dir := getDownloadsDir()
 	if sanitized != "" {
-		return fmt.Sprintf("downloads/%s_%s%s", timestamp, sanitized, ext)
+		return filepath.Join(dir, fmt.Sprintf("%s_%s%s", timestamp, sanitized, ext))
 	}
-	return fmt.Sprintf("downloads/%s%s", timestamp, ext)
+	return filepath.Join(dir, fmt.Sprintf("%s%s", timestamp, ext))
 }
 
 var unsafeChars = regexp.MustCompile(`[^a-zA-Z0-9_\-\s]`)

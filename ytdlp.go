@@ -41,14 +41,17 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 	if req.AudioOnly {
 		args = append(args, "--extract-audio", "--audio-format", "mp3")
 	} else {
+		// Merge into mp4 container when downloading separate video+audio streams
+		args = append(args, "--merge-output-format", "mp4")
 		switch req.Quality {
 		case "480":
-			args = append(args, "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]")
+			args = append(args, "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]/best")
 		case "720":
-			args = append(args, "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]")
+			args = append(args, "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best")
 		case "1080":
-			args = append(args, "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]")
+			args = append(args, "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best")
 		default:
+			// "best" at the end is a fallback for single-stream files
 			args = append(args, "-f", "bestvideo+bestaudio/best")
 		}
 	}

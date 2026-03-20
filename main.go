@@ -4,14 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
 
 func main() {
-	if err := os.MkdirAll("downloads", 0755); err != nil {
-		log.Fatalf("Failed to create downloads directory: %v", err)
-	}
+	// Downloads go to the user's system Downloads folder (see downloader.go)
 
 	ffmpegOk, ffmpegVer := checkTool("ffmpeg")
 	if ffmpegOk {
