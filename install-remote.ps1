@@ -64,10 +64,14 @@ Write-Host "`n[CLONING] video-downloader..." -ForegroundColor Cyan
 if (Test-Path $installDir) {
     Write-Host "[INFO] Directory exists, pulling latest..." -ForegroundColor Yellow
     Push-Location $installDir
-    git pull origin master 2>$null
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git pull origin master | Out-Null
+    Remove-Item Env:\GIT_REDIRECT_STDERR -ErrorAction SilentlyContinue
     Pop-Location
 } else {
-    git clone https://github.com/liamparker17/video-downloader.git $installDir
+    $env:GIT_REDIRECT_STDERR = '2>&1'
+    git clone https://github.com/liamparker17/video-downloader.git $installDir | Out-Null
+    Remove-Item Env:\GIT_REDIRECT_STDERR -ErrorAction SilentlyContinue
 }
 
 Push-Location $installDir
