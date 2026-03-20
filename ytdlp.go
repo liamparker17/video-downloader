@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,11 +32,18 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 	ctx, cancel := context.WithTimeout(ctx, ytdlpTimeout)
 	defer cancel()
 
+	// Find ffmpeg so yt-dlp can merge video+audio streams
+	ffmpegPath, _ := exec.LookPath("ffmpeg")
+
 	args := []string{
 		"--progress",
 		"--newline",
 		"--no-part",
 		"-o", outPath,
+	}
+
+	if ffmpegPath != "" {
+		args = append(args, "--ffmpeg-location", filepath.Dir(ffmpegPath))
 	}
 
 	if req.AudioOnly {
