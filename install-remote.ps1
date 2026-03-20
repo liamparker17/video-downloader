@@ -114,37 +114,101 @@ Write-Host "[OK] Desktop shortcut created" -ForegroundColor Green
 
 Pop-Location
 
-# --- Final instructions ---
+# --- Copy extension path to clipboard ---
 
-Write-Host "`n============================================" -ForegroundColor Cyan
-Write-Host "  Installation complete!" -ForegroundColor Green
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  Two steps left:" -ForegroundColor White
-Write-Host ""
-Write-Host "  1. Double-click 'Video Downloader' on your desktop" -ForegroundColor White
-Write-Host "     (or run: $installDir\video-downloader.exe)" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  2. Load the Chrome extension:" -ForegroundColor White
-Write-Host "     - Chrome is about to open to the extensions page" -ForegroundColor Gray
-Write-Host "     - Enable 'Developer mode' (top-right toggle)" -ForegroundColor Gray
-Write-Host "     - Click 'Load unpacked'" -ForegroundColor Gray
-Write-Host "     - Select: $installDir\extension" -ForegroundColor Yellow
-Write-Host ""
+$extensionPath = "$installDir\extension"
+Set-Clipboard -Value $extensionPath
+Write-Host "[OK] Extension folder path copied to clipboard" -ForegroundColor Green
 
-# Open Chrome extensions page — find Chrome executable and pass URL as argument
+# --- Detect browser and open extensions page ---
+
 $chromePaths = @(
     "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
     "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
     "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
 )
+$bravePaths = @(
+    "${env:ProgramFiles}\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"
+)
+
+$browserExe = $null
+$browserName = $null
+
+# Try Chrome first, then Brave
 $chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+$braveExe = $bravePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
 if ($chromeExe) {
-    Start-Process $chromeExe "chrome://extensions"
-} else {
-    Write-Host "  Could not find Chrome. Open chrome://extensions manually." -ForegroundColor Yellow
+    $browserExe = $chromeExe
+    $browserName = "Chrome"
+} elseif ($braveExe) {
+    $browserExe = $braveExe
+    $browserName = "Brave"
 }
 
-Write-Host "  Then right-click any video and click 'Download Video'!" -ForegroundColor Green
+# --- Final instructions ---
+
 Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "  INSTALLATION COMPLETE!" -ForegroundColor Green
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  STEP 1: Start the downloader" -ForegroundColor White
+Write-Host "  -------" -ForegroundColor Gray
+Write-Host "  Double-click the 'Video Downloader' shortcut" -ForegroundColor White
+Write-Host "  on your Desktop. A black window will open." -ForegroundColor White
+Write-Host "  LEAVE IT OPEN while you download videos." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  STEP 2: Add the extension to your browser" -ForegroundColor White
+Write-Host "  -------" -ForegroundColor Gray
+
+if ($browserExe) {
+    Write-Host "  I'm opening $browserName's extensions page now..." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  When the page opens, do this:" -ForegroundColor White
+} else {
+    Write-Host "  Open Chrome or Brave and go to:" -ForegroundColor White
+    Write-Host "  chrome://extensions" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Then do this:" -ForegroundColor White
+}
+
+Write-Host ""
+Write-Host "    a) Look at the TOP-RIGHT corner of the page" -ForegroundColor White
+Write-Host "       You'll see a toggle switch called" -ForegroundColor White
+Write-Host "       'Developer mode' — TURN IT ON" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "    b) New buttons will appear at the top." -ForegroundColor White
+Write-Host "       Click the button that says" -ForegroundColor White
+Write-Host "       'Load unpacked'" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "    c) A folder picker will open." -ForegroundColor White
+Write-Host "       The path is already copied to your clipboard!" -ForegroundColor Green
+Write-Host "       Just click the address bar at the top," -ForegroundColor White
+Write-Host "       press Ctrl+V to paste, then press Enter." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "       Path: $extensionPath" -ForegroundColor Gray
+Write-Host ""
+Write-Host "    d) Click 'Select Folder'" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  That's it! The extension is now installed." -ForegroundColor Green
+Write-Host ""
+Write-Host "  STEP 3: Download a video" -ForegroundColor White
+Write-Host "  -------" -ForegroundColor Gray
+Write-Host "  Go to any website with a video (YouTube, etc.)" -ForegroundColor White
+Write-Host "  RIGHT-CLICK anywhere on the page and click" -ForegroundColor White
+Write-Host "  'Download Video'" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  Your video will be saved to:" -ForegroundColor White
+Write-Host "  $installDir\downloads" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Cyan
+Write-Host ""
+
+if ($browserExe) {
+    Start-Process $browserExe "chrome://extensions"
+}
+
 Read-Host "Press Enter to finish"
