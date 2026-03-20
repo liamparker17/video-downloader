@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Video Downloader",
+  "version": "1.0.0",
+  "description": "Right-click any video to download it via a local Go backend.",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "cookies"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
