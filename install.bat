@@ -31,6 +31,26 @@ echo [OK] ffmpeg found:
 ffmpeg -version 2>&1 | findstr /R "^ffmpeg"
 echo.
 
+REM Check yt-dlp (optional but recommended)
+where yt-dlp >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [WARN] yt-dlp not found. Attempting install via winget...
+    winget install yt-dlp 2>nul
+    where yt-dlp >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        echo [WARN] yt-dlp could not be installed automatically.
+        echo         Download from: https://github.com/yt-dlp/yt-dlp/releases
+        echo         Without yt-dlp, YouTube and social media downloads will not work.
+        echo.
+    ) else (
+        echo [OK] yt-dlp installed successfully.
+    )
+) else (
+    echo [OK] yt-dlp found:
+    yt-dlp --version
+)
+echo.
+
 REM Download Go module dependencies
 echo [INSTALLING] Go module dependencies...
 go mod tidy
