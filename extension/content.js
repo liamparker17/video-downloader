@@ -1,66 +1,32 @@
-// Content script: runs on every page to detect video elements.
-// Responds to messages from the background script.
-
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.action !== "getVideoInfo") return;
-
-  const videoUrl = findVideoUrl(message.clickedSrc);
-
-  sendResponse({
-    url: videoUrl || null,
-  });
+  const sources = findAllVideoUrls(message.clickedSrc);
+  const bestUrl = sources.length > 0 ? sources[0] : null;
+  sendResponse({ url: bestUrl, title: document.title || "", sources: sources });
 });
 
-// Find the best video URL on the page.
-// Priority: clickedSrc (from context menu) > <video> src > <source> src > DOM scan
-function findVideoUrl(clickedSrc) {
-  // 1. If Chrome detected a video element and gave us srcUrl, use it
-  if (clickedSrc && isVideoUrl(clickedSrc)) {
-    return clickedSrc;
+function findAllVideoUrls(clickedSrc) {
+  const found = [];
+  const seen = new Set();
+  function add(url) {
+    if (url && !seen.has(url) && isVideoUrl(url)) { seen.add(url); found.push(url); }
   }
-
-  // 2. Look for HTML5 <video> elements with a src attribute
-  const videos = document.querySelectorAll("video");
-  for (const video of videos) {
-    if (video.src && isVideoUrl(video.src)) {
-      return video.src;
-    }
-    // Check currentSrc (set by the browser after source selection)
-    if (video.currentSrc && isVideoUrl(video.currentSrc)) {
-      return video.currentSrc;
-    }
-    // Check nested <source> elements
-    const sources = video.querySelectorAll("source");
-    for (const source of sources) {
-      if (source.src && isVideoUrl(source.src)) {
-        return source.src;
-      }
-    }
+  add(clickedSrc);
+  for (const video of document.querySelectorAll("video")) {
+    add(video.src);
+    add(video.currentSrc);
+    for (const source of video.querySelectorAll("source")) { add(source.src); }
   }
-
-  // 3. Fallback: scan all DOM elements for video URLs in src/href attributes
-  const allElements = document.querySelectorAll("[src], [href]");
-  for (const el of allElements) {
-    const attr = el.src || el.href;
-    if (attr && isVideoUrl(attr)) {
-      return attr;
-    }
-  }
-
-  return null;
+  for (const el of document.querySelectorAll("[src], [href]")) { add(el.src || el.href); }
+  return found;
 }
 
-// Check if a URL looks like a video resource.
 function isVideoUrl(url) {
   if (!url || url.startsWith("blob:") || url.startsWith("data:")) return false;
   const lower = url.toLowerCase().split("?")[0];
   return (
-    lower.endsWith(".mp4") ||
-    lower.endsWith(".webm") ||
-    lower.endsWith(".m3u8") ||
-    lower.endsWith(".ts") ||
-    lower.endsWith(".mkv") ||
-    lower.endsWith(".avi") ||
-    lower.endsWith(".mov")
+    lower.endsWith(".mp4") || lower.endsWith(".webm") || lower.endsWith(".m3u8") ||
+    lower.endsWith(".mpd") || lower.endsWith(".ts") || lower.endsWith(".mkv") ||
+    lower.endsWith(".avi") || lower.endsWith(".mov")
   );
 }
