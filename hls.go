@@ -16,13 +16,21 @@ import (
 )
 
 const segmentTimeout = 60 * time.Second
+const manifestTimeout = 30 * time.Second
+const hlsOverallTimeout = 30 * time.Minute
 
 var segmentBackoffs = []time.Duration{1 * time.Second, 3 * time.Second}
 
 func downloadHLS(ctx context.Context, req DownloadRequest, job *Job, outPath string) error {
+	ctx, cancel := context.WithTimeout(ctx, hlsOverallTimeout)
+	defer cancel()
+
 	client := &http.Client{}
 
-	httpReq, err := buildRequest(ctx, "GET", req.URL, req)
+	manifestCtx, manifestCancel := context.WithTimeout(ctx, manifestTimeout)
+	defer manifestCancel()
+
+	httpReq, err := buildRequest(manifestCtx, "GET", req.URL, req)
 	if err != nil {
 		return err
 	}

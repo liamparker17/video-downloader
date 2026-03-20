@@ -56,10 +56,18 @@ type mpdURL struct {
 	Media     string `xml:"media,attr"`
 }
 
+const dashOverallTimeout = 30 * time.Minute
+
 func downloadDASH(ctx context.Context, req DownloadRequest, job *Job, outPath string) error {
+	ctx, cancel := context.WithTimeout(ctx, dashOverallTimeout)
+	defer cancel()
+
 	client := &http.Client{}
 
-	httpReq, err := buildRequest(ctx, "GET", req.URL, req)
+	manifestCtx, manifestCancel := context.WithTimeout(ctx, manifestTimeout)
+	defer manifestCancel()
+
+	httpReq, err := buildRequest(manifestCtx, "GET", req.URL, req)
 	if err != nil {
 		return err
 	}
