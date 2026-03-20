@@ -74,7 +74,7 @@ func handleCreateJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := store.CreateJob(req.URL, req.PageURL, req.Title, req.Quality, req.AudioOnly)
-	log.Printf("[JOB CREATED] ID: %s, URL: %s, PageURL: %s", job.ID, req.URL, req.PageURL)
+	log.Printf("[JOB CREATED] ID: %s, URL: %s, PageURL: %s, Quality: %s, AudioOnly: %v", job.ID, req.URL, req.PageURL, req.Quality, req.AudioOnly)
 
 	go runPipeline(job, req)
 

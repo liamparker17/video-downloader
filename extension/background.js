@@ -39,7 +39,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => { if (changeInfo.url) t
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({ id: "download-video", title: "Download Video", contexts: ["video", "page", "link"] });
-  console.log("[Video Downloader] Extension installed.");
+  // Reset defaults on install/update — video mode by default, not audio
+  chrome.storage.local.set({ defaultQuality: "best", defaultAudioOnly: false });
+  console.log("[Video Downloader] Extension installed. Defaults reset.");
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -62,7 +64,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     const payload = {
       url: bestUrl, pageUrl: tab.url, title: title, cookies: cookies,
       headers: { "User-Agent": navigator.userAgent, Referer: tab.url },
-      quality: settings.defaultQuality || "best", audioOnly: settings.defaultAudioOnly || false,
+      quality: settings.defaultQuality || "best", audioOnly: settings.defaultAudioOnly === true ? true : false,
     };
     console.log("[Video Downloader] Sending download request:", payload);
     const res = await fetch(`${BACKEND}/download`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
