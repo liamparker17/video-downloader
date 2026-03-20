@@ -13,11 +13,14 @@ Write-Host "============================================`n" -ForegroundColor Cya
 
 # Go
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Go is not installed." -ForegroundColor Red
-    Write-Host "        Install it: winget install GoLang.Go" -ForegroundColor Yellow
-    Write-Host "        Or download: https://go.dev/dl/`n" -ForegroundColor Yellow
-    Read-Host "Press Enter to exit"
-    exit 1
+    Write-Host "[INSTALLING] Go via winget..." -ForegroundColor Yellow
+    winget install GoLang.Go --accept-source-agreements --accept-package-agreements 2>$null
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
+        Write-Host "[ERROR] Go install failed. Install manually: winget install GoLang.Go" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
 }
 Write-Host "[OK] Go: $(go version)" -ForegroundColor Green
 
@@ -65,11 +68,16 @@ if (-not (Get-Command deno -ErrorAction SilentlyContinue)) {
 
 # Git
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Git is not installed." -ForegroundColor Red
-    Write-Host "        Install it: winget install Git.Git" -ForegroundColor Yellow
-    Read-Host "Press Enter to exit"
-    exit 1
+    Write-Host "[INSTALLING] Git via winget..." -ForegroundColor Yellow
+    winget install Git.Git --accept-source-agreements --accept-package-agreements 2>$null
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Host "[ERROR] Git install failed. Install manually: winget install Git.Git" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
 }
+Write-Host "[OK] Git found" -ForegroundColor Green
 
 # --- Clone and build ---
 
