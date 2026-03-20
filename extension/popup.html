@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Video Downloader</h1>
+    <button id="settings-btn" title="Settings">&#9881;</button>
+  </header>
+  <nav>
+    <button class="tab active" data-tab="sources">Sources</button>
+    <button class="tab" data-tab="downloads">Downloads</button>
+  </nav>
+  <section id="sources" class="panel active">
+    <div id="source-list"><p class="muted">Scanning for videos...</p></div>
+    <div class="controls">
+      <label>Quality: <select id="quality"><option value="best">Best</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+      <label><input type="checkbox" id="audio-only"> Audio only</label>
+    </div>
+    <button id="download-btn" class="primary" disabled>Download Selected</button>
+  </section>
+  <section id="downloads" class="panel">
+    <div id="job-list"><p class="muted">No downloads yet.</p></div>
+  </section>
+  <section id="settings" class="panel">
+    <h2>Settings</h2>
+    <label>Default Quality: <select id="default-quality"><option value="best">Best</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></label>
+    <label><input type="checkbox" id="default-audio-only"> Default Audio Only</label>
+    <div id="tool-status"></div>
+    <button id="settings-back" class="secondary">Back</button>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>
