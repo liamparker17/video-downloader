@@ -128,8 +128,18 @@ Write-Host "     - Click 'Load unpacked'" -ForegroundColor Gray
 Write-Host "     - Select: $installDir\extension" -ForegroundColor Yellow
 Write-Host ""
 
-# Open Chrome extensions page
-Start-Process "chrome://extensions"
+# Open Chrome extensions page — find Chrome executable and pass URL as argument
+$chromePaths = @(
+    "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+)
+$chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($chromeExe) {
+    Start-Process $chromeExe "chrome://extensions"
+} else {
+    Write-Host "  Could not find Chrome. Open chrome://extensions manually." -ForegroundColor Yellow
+}
 
 Write-Host "  Then right-click any video and click 'Download Video'!" -ForegroundColor Green
 Write-Host ""
