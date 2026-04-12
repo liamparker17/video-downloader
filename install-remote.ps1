@@ -255,8 +255,8 @@ Write-Host ""
 Write-Host "  Videos are saved to your Downloads folder:" -ForegroundColor White
 Write-Host "  $env:USERPROFILE\Downloads" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  TIP: Open downloaded videos with VLC for best" -ForegroundColor Gray
-Write-Host "  compatibility (some players can't handle all formats)" -ForegroundColor Gray
+Write-Host "  Videos are auto-converted to play in any player" -ForegroundColor Gray
+Write-Host "  including Windows Media Player — no VLC needed!" -ForegroundColor Gray
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
