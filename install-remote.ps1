@@ -11,19 +11,6 @@ Write-Host "============================================`n" -ForegroundColor Cya
 
 # --- Check prerequisites ---
 
-# Go
-if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    Write-Host "[INSTALLING] Go via winget..." -ForegroundColor Yellow
-    winget install GoLang.Go --accept-source-agreements --accept-package-agreements 2>$null
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
-    if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-        Write-Host "[ERROR] Go install failed. Install manually: winget install GoLang.Go" -ForegroundColor Red
-        Read-Host "Press Enter to exit"
-        exit 1
-    }
-}
-Write-Host "[OK] Go: $(go version)" -ForegroundColor Green
-
 # ffmpeg
 if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     Write-Host "[INSTALLING] ffmpeg via winget..." -ForegroundColor Yellow
@@ -52,93 +39,57 @@ if (-not (Get-Command yt-dlp -ErrorAction SilentlyContinue)) {
     Write-Host "[OK] yt-dlp found" -ForegroundColor Green
 }
 
-# deno (needed by yt-dlp for YouTube)
-if (-not (Get-Command deno -ErrorAction SilentlyContinue)) {
-    Write-Host "[INSTALLING] deno (needed by yt-dlp for YouTube)..." -ForegroundColor Yellow
-    winget install DenoLand.Deno --accept-source-agreements --accept-package-agreements 2>$null
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
-    if (-not (Get-Command deno -ErrorAction SilentlyContinue)) {
-        Write-Host "[WARN] deno not installed. Some YouTube formats may not work." -ForegroundColor Yellow
-    } else {
-        Write-Host "[OK] deno installed" -ForegroundColor Green
-    }
-} else {
-    Write-Host "[OK] deno found" -ForegroundColor Green
+# --- Download pre-built binary from GitHub Releases ---
+
+$repo = "liamparker17/video-downloader"
+
+if (-not (Test-Path $installDir)) {
+    New-Item -ItemType Directory -Path $installDir | Out-Null
 }
 
-# Git
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "[INSTALLING] Git via winget..." -ForegroundColor Yellow
-    winget install Git.Git --accept-source-agreements --accept-package-agreements 2>$null
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
-    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-        Write-Host "[ERROR] Git install failed. Install manually: winget install Git.Git" -ForegroundColor Red
-        Read-Host "Press Enter to exit"
-        exit 1
-    }
-}
-Write-Host "[OK] Git found" -ForegroundColor Green
+Write-Host "`n[DOWNLOADING] Fetching latest release..." -ForegroundColor Cyan
 
-# --- Clone and build ---
-
-Write-Host "`n[CLONING] video-downloader..." -ForegroundColor Cyan
-if (Test-Path $installDir) {
-    Write-Host "[INFO] Directory exists, pulling latest..." -ForegroundColor Yellow
-    Push-Location $installDir
-    $env:GIT_REDIRECT_STDERR = '2>&1'
-    git pull origin master | Out-Null
-    Remove-Item Env:\GIT_REDIRECT_STDERR -ErrorAction SilentlyContinue
-    Pop-Location
-} else {
-    $env:GIT_REDIRECT_STDERR = '2>&1'
-    git clone https://github.com/liamparker17/video-downloader.git $installDir | Out-Null
-    Remove-Item Env:\GIT_REDIRECT_STDERR -ErrorAction SilentlyContinue
-}
-
-Push-Location $installDir
-
-Write-Host "[BUILDING] Compiling Go backend..." -ForegroundColor Cyan
-go build -o video-downloader.exe .
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Build failed." -ForegroundColor Red
-    Pop-Location
+try {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers @{ "User-Agent" = "video-downloader-installer" }
+    $asset = $release.assets | Where-Object { $_.name -eq "video-downloader.exe" } | Select-Object -First 1
+} catch {
+    Write-Host "[ERROR] Could not reach GitHub. Check your internet connection." -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
-Write-Host "[OK] Built video-downloader.exe" -ForegroundColor Green
 
-# --- Create start script with PATH refresh ---
+if (-not $asset) {
+    Write-Host "[ERROR] No binary found in release $($release.tag_name)" -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
 
-$startScript = @"
-@echo off
-cd /d "$installDir"
+$exePath = "$installDir\video-downloader.exe"
 
-REM Refresh PATH so yt-dlp, deno, ffmpeg are found
-for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USER_PATH=%%B"
-for /f "tokens=2*" %%A in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYS_PATH=%%B"
-set "PATH=%SYS_PATH%;%USER_PATH%"
+Write-Host "[DOWNLOADING] video-downloader.exe ($($release.tag_name), $([math]::Round($asset.size / 1MB, 1)) MB)..." -ForegroundColor Cyan
+Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $exePath -UseBasicParsing
+Write-Host "[OK] Downloaded video-downloader.exe" -ForegroundColor Green
 
-if not exist video-downloader.exe (
-    echo First run — building video-downloader.exe...
-    go build -o video-downloader.exe .
-    if %ERRORLEVEL% neq 0 (
-        echo Build failed. Make sure Go is installed.
-        pause
-        exit /b 1
-    )
-)
+# --- Download extension files from GitHub ---
 
-echo ============================================
-echo  Video Downloader Backend
-echo ============================================
-echo.
-echo  Leave this window open while downloading.
-echo  Press Ctrl+C to stop.
-echo.
-video-downloader.exe
-pause
-"@
-Set-Content -Path "$installDir\start.bat" -Value $startScript
+Write-Host "[DOWNLOADING] Extension files..." -ForegroundColor Cyan
+
+$extensionDir = "$installDir\extension"
+if (-not (Test-Path $extensionDir)) {
+    New-Item -ItemType Directory -Path $extensionDir | Out-Null
+}
+
+$extensionFiles = @("manifest.json", "popup.html", "popup.js", "background.js", "content.js", "popup.css", "icon16.png", "icon48.png", "icon128.png")
+$baseRawUrl = "https://raw.githubusercontent.com/$repo/master/extension"
+
+foreach ($file in $extensionFiles) {
+    try {
+        Invoke-WebRequest -Uri "$baseRawUrl/$file" -OutFile "$extensionDir\$file" -UseBasicParsing 2>$null
+    } catch {
+        Write-Host "  [WARN] Could not download $file" -ForegroundColor Yellow
+    }
+}
+Write-Host "[OK] Extension files downloaded" -ForegroundColor Green
 
 # --- Create desktop shortcut ---
 
@@ -146,7 +97,7 @@ $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcutPath = "$desktop\Video Downloader.lnk"
 $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = "$installDir\start.bat"
+$shortcut.TargetPath = "$installDir\video-downloader.exe"
 $shortcut.WorkingDirectory = $installDir
 $shortcut.Description = "Start Video Downloader backend"
 $shortcut.Save()
@@ -156,14 +107,12 @@ Write-Host "[OK] Desktop shortcut created" -ForegroundColor Green
 
 $startupPath = [Environment]::GetFolderPath("Startup")
 $startupShortcut = $shell.CreateShortcut("$startupPath\Video Downloader.lnk")
-$startupShortcut.TargetPath = "$installDir\start.bat"
+$startupShortcut.TargetPath = "$installDir\video-downloader.exe"
 $startupShortcut.WorkingDirectory = $installDir
 $startupShortcut.WindowStyle = 7
 $startupShortcut.Description = "Auto-start Video Downloader backend"
 $startupShortcut.Save()
 Write-Host "[OK] Auto-start on login enabled" -ForegroundColor Green
-
-Pop-Location
 
 # --- Copy extension path to clipboard ---
 
