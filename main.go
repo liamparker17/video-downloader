@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	// Auto-update from GitHub Releases on startup
+	autoUpdate()
+
 	// Downloads go to the user's system Downloads folder (see downloader.go)
 
 	ffmpegOk, ffmpegVer := checkTool("ffmpeg")
