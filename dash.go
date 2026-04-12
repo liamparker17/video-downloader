@@ -62,7 +62,7 @@ func downloadDASH(ctx context.Context, req DownloadRequest, job *Job, outPath st
 	ctx, cancel := context.WithTimeout(ctx, dashOverallTimeout)
 	defer cancel()
 
-	client := &http.Client{}
+	client := downloadClient()
 
 	manifestCtx, manifestCancel := context.WithTimeout(ctx, manifestTimeout)
 	defer manifestCancel()

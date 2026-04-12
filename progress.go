@@ -38,6 +38,7 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 		if elapsed > 0 {
 			bytesPerSec := float64(current) / elapsed
 			pw.job.Speed = formatSpeed(bytesPerSec)
+			pw.job.SpeedBPS = bytesPerSec
 		}
 	}
 	return n, err

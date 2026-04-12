@@ -60,6 +60,9 @@ func isDirectVideoURL(rawURL string) bool {
 }
 
 func runPipeline(job *Job, req DownloadRequest) {
+	RegisterDownload()
+	defer UnregisterDownload()
+
 	job.Status = "downloading"
 
 	ext := ".mp4"
@@ -117,6 +120,19 @@ func runPipeline(job *Job, req DownloadRequest) {
 		os.Remove(outPath)
 		outPath = audioPath
 		job.Filename = filepath.Base(audioPath)
+	}
+
+	// Auto-convert incompatible codecs so the file plays in Windows Media Player
+	if !req.AudioOnly {
+		finalPath, err := ensureWMPCompatible(ctx, outPath, job)
+		if err != nil {
+			job.Status = "failed"
+			job.Error = err.Error()
+			log.Printf("[PIPELINE] Job %s compat re-encode failed: %v", job.ID, err)
+			return
+		}
+		outPath = finalPath
+		job.Filename = filepath.Base(outPath)
 	}
 
 	job.Status = "completed"

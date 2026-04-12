@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -25,7 +24,7 @@ func downloadHLS(ctx context.Context, req DownloadRequest, job *Job, outPath str
 	ctx, cancel := context.WithTimeout(ctx, hlsOverallTimeout)
 	defer cancel()
 
-	client := &http.Client{}
+	client := downloadClient()
 
 	manifestCtx, manifestCancel := context.WithTimeout(ctx, manifestTimeout)
 	defer manifestCancel()

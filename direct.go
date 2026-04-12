@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/http"
 	"os"
 	"time"
 )
@@ -16,7 +15,7 @@ func downloadDirect(ctx context.Context, req DownloadRequest, job *Job, outPath 
 	ctx, cancel := context.WithTimeout(ctx, directTimeout)
 	defer cancel()
 
-	client := &http.Client{}
+	client := downloadClient()
 
 	httpReq, err := buildRequest(ctx, "GET", req.URL, req)
 	if err != nil {
@@ -38,7 +37,7 @@ func downloadDirect(ctx context.Context, req DownloadRequest, job *Job, outPath 
 
 	pw := NewProgressWriter(out, job, resp.ContentLength)
 
-	written, err := io.Copy(pw, resp.Body)
+	written, err := io.CopyBuffer(pw, resp.Body, make([]byte, 256*1024))
 	if err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("writing file: %w", err)

@@ -18,7 +18,7 @@ const ytdlpTimeout = 15 * time.Minute
 var ytdlpAvailable bool
 
 var ytdlpProgressRe = regexp.MustCompile(`\[download\]\s+([\d.]+)%`)
-var ytdlpSpeedRe = regexp.MustCompile(`at\s+([\d.]+\s*\S+/s)`)
+var ytdlpSpeedUnitRe = regexp.MustCompile(`([\d.]+)\s*(B|KiB|MiB|GiB)/s`)
 
 func checkYtdlp() (bool, string) {
 	return checkTool("yt-dlp", "--version")
@@ -35,11 +35,28 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 	// Find ffmpeg so yt-dlp can merge video+audio streams
 	ffmpegPath, _ := exec.LookPath("ffmpeg")
 
+	// Use multiple concurrent fragment downloads to saturate the connection.
+	// More TCP connections = larger share of available bandwidth at the network level.
+	// 8 fragments for a single download is aggressive but maximizes throughput.
+	concurrentFrags := 8
+	active := int(activeDownloads.Load())
+	if active > 1 {
+		// Scale down fragments when multiple downloads are active to stay fair
+		concurrentFrags = max(2, 8/active)
+	}
+
 	args := []string{
 		"--progress",
 		"--newline",
 		"--no-part",
+		"--concurrent-fragments", fmt.Sprintf("%d", concurrentFrags),
 		"-o", outPath,
+	}
+
+	// Fair-share bandwidth limiting when multiple downloads are active
+	if rateLimit := ytdlpRateFlag(); rateLimit != "" {
+		args = append(args, "--limit-rate", rateLimit)
+		log.Printf("[YT-DLP] Rate-limited to %s (concurrent downloads active)", rateLimit)
 	}
 
 	if ffmpegPath != "" {
@@ -49,19 +66,21 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 	if req.AudioOnly {
 		args = append(args, "--extract-audio", "--audio-format", "mp3")
 	} else {
-		// Merge into mp4 container when downloading separate video+audio streams
+		// Merge into mp4 container; prefer H.264+AAC for Windows Media Player compatibility
 		args = append(args, "--merge-output-format", "mp4")
 		switch req.Quality {
 		case "480":
-			args = append(args, "-f", "bestvideo[height<=480]+bestaudio/best[height<=480]/best")
+			args = append(args, "-f", "bestvideo[vcodec^=avc1][height<=480]+bestaudio[acodec^=mp4a]/bestvideo[height<=480]+bestaudio/best[height<=480]/best")
 		case "720":
-			args = append(args, "-f", "bestvideo[height<=720]+bestaudio/best[height<=720]/best")
+			args = append(args, "-f", "bestvideo[vcodec^=avc1][height<=720]+bestaudio[acodec^=mp4a]/bestvideo[height<=720]+bestaudio/best[height<=720]/best")
 		case "1080":
-			args = append(args, "-f", "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best")
+			args = append(args, "-f", "bestvideo[vcodec^=avc1][height<=1080]+bestaudio[acodec^=mp4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best")
 		default:
-			// "best" at the end is a fallback for single-stream files
-			args = append(args, "-f", "bestvideo+bestaudio/best")
+			args = append(args, "-f", "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best")
 		}
+		// Re-encode audio to AAC during merge for Windows Media Player compatibility
+		// (copies video as-is, only audio gets re-encoded — fast)
+		args = append(args, "--ppa", "Merger:-c:v copy -c:a aac -b:a 192k")
 	}
 
 	if req.Cookies != "" {
@@ -77,6 +96,7 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 	log.Printf("[YT-DLP] Running: yt-dlp %s", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
+	setHighPriority(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -97,8 +117,22 @@ func downloadYtdlp(ctx context.Context, req DownloadRequest, job *Job, outPath s
 				job.Progress = pct
 			}
 		}
-		if match := ytdlpSpeedRe.FindStringSubmatch(line); len(match) > 1 {
-			job.Speed = match[1]
+		if match := ytdlpSpeedUnitRe.FindStringSubmatch(line); len(match) > 2 {
+			if val, err := strconv.ParseFloat(match[1], 64); err == nil {
+				var bps float64
+				switch match[2] {
+				case "GiB":
+					bps = val * 1024 * 1024 * 1024
+				case "MiB":
+					bps = val * 1024 * 1024
+				case "KiB":
+					bps = val * 1024
+				default:
+					bps = val
+				}
+				job.SpeedBPS = bps
+				job.Speed = formatSpeed(bps)
+			}
 		}
 	}
 

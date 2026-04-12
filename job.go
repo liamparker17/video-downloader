@@ -17,6 +17,7 @@ type Job struct {
 	Status    string    `json:"status"`
 	Progress  float64   `json:"progress"`
 	Speed     string    `json:"speed"`
+	SpeedBPS  float64   `json:"-"` // raw bytes/sec for bandwidth management
 	Filename  string    `json:"filename"`
 	Error     string    `json:"error,omitempty"`
 	AudioOnly bool      `json:"audioOnly"`

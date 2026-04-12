@@ -18,7 +18,8 @@ func ffmpegConvert(ctx context.Context, input, output string) error {
 	defer cancel()
 
 	log.Printf("[FFMPEG] Converting %s -> %s", input, output)
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", input, "-c", "copy", output)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-y", "-i", input, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", output)
+	setHighPriority(cmd)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -42,9 +43,11 @@ func ffmpegMux(ctx context.Context, videoPath, audioPath, output string) error {
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-y",
 		"-i", videoPath,
 		"-i", audioPath,
-		"-c", "copy",
+		"-c:v", "copy",
+		"-c:a", "aac", "-b:a", "192k",
 		output,
 	)
+	setHighPriority(cmd)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -72,6 +75,7 @@ func ffmpegExtractAudio(ctx context.Context, input, output string) error {
 		"-q:a", "2",
 		output,
 	)
+	setHighPriority(cmd)
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
