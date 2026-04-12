@@ -7,14 +7,17 @@ import (
 )
 
 // downloadClient returns an HTTP client optimized for high-throughput downloads.
-// Larger TCP buffers and more idle connections help saturate the network link.
+// Sets DSCP AF41 on all sockets so QoS-aware routers prioritize download traffic.
 func downloadClient() *http.Client {
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		Control:   setSocketDSCP,
+	}
+
 	return &http.Client{
 		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			DialContext:           dialer.DialContext,
 			MaxIdleConns:          100,
 			MaxIdleConnsPerHost:   10,
 			IdleConnTimeout:       90 * time.Second,
